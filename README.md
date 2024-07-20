@@ -53,7 +53,7 @@ Target (remote) parameters. (only one target path)
 ### EXECUTION:
 Execute with mode as parameter:
 
-    python3 .\copier.py [mode] [config]
+    python3 .\scp_copy.py [mode] [config]
 
 b, c and r are the modes (Backup, Copy, Revert).
 
