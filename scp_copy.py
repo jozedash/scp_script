@@ -54,44 +54,6 @@ CFG_TARGET_POST = "post"
 # Utility and helper functions
 # ================================= #
 
-# readCfgFile
-# Parse the config file on the provided path
-# param configFilePath: the path to the config file
-# return a config dictionary
-def readCfgFile(configFilePath):
-
-    if not os.path.exists(configFilePath):
-        print("Config file at: " + configFilePath + " does not exist!")
-        sys.exit(1)
-    
-    configFile = ConfigParser() 
-    configFile.read(configFilePath)
-    config = dict()
-
-    config[SECTION_LOCAL] = dict()
-    config[SECTION_TARGET] = dict()
-
-    # Support multiple input directories split over multiple lines
-    config[SECTION_LOCAL][CFG_LOCAL_PATH] = configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitlines()
-    
-    config[SECTION_LOCAL][CFG_BACKUPS_PATH] = configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH)
-
-    config[SECTION_TARGET][CFG_IP] = configFile.get(SECTION_TARGET, CFG_IP)
-    config[SECTION_TARGET][CFG_PORT] = configFile.get(SECTION_TARGET, CFG_PORT)
-    config[SECTION_TARGET][CFG_USERNAME] = configFile.get(SECTION_TARGET, CFG_USERNAME)
-    config[SECTION_TARGET][CFG_PWD] = configFile.get(SECTION_TARGET, CFG_PWD)
-    config[SECTION_TARGET][CFG_TARGET_PATH] = configFile.get(SECTION_TARGET, CFG_TARGET_PATH)
-
-    # Support multiple commands over several lines, here
-    config[SECTION_TARGET][CFG_TARGET_PRE] = configFile.get(SECTION_TARGET, CFG_TARGET_PRE).splitlines()
-    config[SECTION_TARGET][CFG_TARGET_POST] = configFile.get(SECTION_TARGET, CFG_TARGET_POST).splitlines()
-
-    if DEBUG:
-        prettyPrint = json.dumps(config, indent=4)
-        print(prettyPrint)
-
-    return config
-
 # handleStdOut
 # Decode and print stdout from target
 # param stdout: the stdout from the target command
@@ -176,24 +138,30 @@ if len(sys.argv) > ARG_INDEX_CFG:
     # config
     configFilePath = sys.argv[ARG_INDEX_CFG]
 
-config = readCfgFile(configFilePath)
+
+if not os.path.exists(configFilePath):
+    print("Config file at: " + configFilePath + " does not exist!")
+    sys.exit(1)
+
+configFile = ConfigParser() 
+configFile.read(configFilePath)
 
 # Setup SSH ======================= #
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_CFG_policy(paramiko.AutoAddPolicy())
 try:
-    ssh.connect(config[SECTION_TARGET][CFG_IP], \
-                port=config[SECTION_TARGET][CFG_PORT], \
-                username=config[SECTION_TARGET][CFG_USERNAME], \
-                password=config[SECTION_TARGET][CFG_PWD], \
+    ssh.connect(configFile.get(SECTION_TARGET, CFG_IP), \
+                port=configFile.get(SECTION_TARGET, CFG_PORT), \
+                username=configFile.get(SECTION_TARGET, CFG_USERNAME), \
+                password=configFile.get(SECTION_TARGET, CFG_PWD), \
                 timeout=3)
 except:
     print("Failed to connect to host '" \
-        + config[SECTION_TARGET][CFG_USERNAME] \
+        + configFile.get(SECTION_TARGET, CFG_USERNAME) \
         + "@" \
-        + config[SECTION_TARGET][CFG_IP] \
+        + configFile.get(SECTION_TARGET, CFG_IP) \
         + "' with password: '" \
-        + config[SECTION_TARGET][CFG_PWD] \
+        + configFile.get(SECTION_TARGET, CFG_PWD) \
         + "'")
     print("Please check your connection and config is ok")
     sys.exit(1)
@@ -204,23 +172,23 @@ scp = SCPClient(ssh.get_transport())
 # Backup ========================== #
 if mode == MODE_BACKUP:
     # Search target for each file in the source directory(ies) and try to back it up
-    if os.path.exists(config[SECTION_LOCAL][CFG_BACKUPS_PATH]):
-        shutil.rmtree(config[SECTION_LOCAL][CFG_BACKUPS_PATH])
+    if os.path.exists(configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH)):
+        shutil.rmtree(configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH))
 
-    os.makedirs(config[SECTION_LOCAL][CFG_BACKUPS_PATH], \
+    os.makedirs(configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH), \
                 exist_ok=True)
 
     successCount = 0
     skipCount = 0
-    for directory in config[SECTION_LOCAL][CFG_LOCAL_PATH]:
+    for directory in configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitLines():
         for root, dirs, files in os.walk(directory):
             for file in files:
                 relativePath = os.path.relpath(os.path.join(root, file), start=directory)
                 genericPath = re.sub(r'\\', '/', relativePath) # scp library does not support Windows paths
 
-                targetFile = os.path.join(config[SECTION_TARGET][CFG_TARGET_PATH], \
+                targetFile = os.path.join(configFile.get(SECTION_TARGET, CFG_TARGET_PATH), \
                                             genericPath)
-                backupPath = os.path.join(config[SECTION_LOCAL][CFG_BACKUPS_PATH], \
+                backupPath = os.path.join(configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH), \
                                           os.path.split(genericPath)[0])
                 print("Back up target file " + targetFile + " to local path " + backupPath)
                 
@@ -244,22 +212,22 @@ if mode == MODE_BACKUP:
 elif mode == MODE_COPY or mode == MODE_REVERT:
     
     # Run target pre scp commands ======== #
-    for command in config[SECTION_TARGET][CFG_TARGET_PRE]:
+    for command in configFile.get(SECTION_TARGET, CFG_TARGET_PRE).splitLines():
         runTargetCommand(ssh, command)
 
     # Copy ============================ #
     if mode == MODE_COPY:
         print("Copying local files to target")
-        for localPath in config[SECTION_LOCAL][CFG_LOCAL_PATH]:
-            scpLocal2Target(scp, localPath, config[SECTION_TARGET][CFG_TARGET_PATH])
+        for localPath in configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitLines():
+            scpLocal2Target(scp, localPath, configFile.get(SECTION_TARGET, CFG_TARGET_PATH))
 
     # Revert ========================== #
     elif mode == MODE_REVERT:
         print("Copying backed up files to target")
-        scpLocal2Target(scp, config[SECTION_LOCAL][CFG_BACKUPS_PATH], config[SECTION_TARGET][CFG_TARGET_PATH])
+        scpLocal2Target(scp, configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH), configFile.get(SECTION_TARGET, CFG_TARGET_PATH))
     
     # Run target post scp commands ==== #
-    for command in config[SECTION_TARGET][CFG_TARGET_POST]:
+    for command in configFile.get(SECTION_TARGET, CFG_TARGET_POST).splitLines():
         runTargetCommand(ssh, command)
 
 # close scp
