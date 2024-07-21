@@ -24,7 +24,7 @@ DEBUG = False
 # 'Global' variables
 # ================================= #
 
-DEFAULT_CONF = "./copier.cfg"
+DEFAULT_CONF = "./scp_copy.cfg"
 
 # Argv indeces
 ARG_INDEX_MODE = 1
