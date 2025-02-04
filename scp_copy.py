@@ -148,7 +148,7 @@ configFile.read(configFilePath)
 
 # Setup SSH ======================= #
 ssh = paramiko.SSHClient()
-ssh.set_missing_host_CFG_policy(paramiko.AutoAddPolicy())
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 try:
     ssh.connect(configFile.get(SECTION_TARGET, CFG_IP), \
                 port=configFile.get(SECTION_TARGET, CFG_PORT), \
@@ -180,7 +180,7 @@ if mode == MODE_BACKUP:
 
     successCount = 0
     skipCount = 0
-    for directory in configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitLines():
+    for directory in configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitlines():
         for root, dirs, files in os.walk(directory):
             for file in files:
                 relativePath = os.path.relpath(os.path.join(root, file), start=directory)
@@ -212,13 +212,13 @@ if mode == MODE_BACKUP:
 elif mode == MODE_COPY or mode == MODE_REVERT:
     
     # Run target pre scp commands ======== #
-    for command in configFile.get(SECTION_TARGET, CFG_TARGET_PRE).splitLines():
+    for command in configFile.get(SECTION_TARGET, CFG_TARGET_PRE).splitlines():
         runTargetCommand(ssh, command)
 
     # Copy ============================ #
     if mode == MODE_COPY:
         print("Copying local files to target")
-        for localPath in configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitLines():
+        for localPath in configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitlines():
             scpLocal2Target(scp, localPath, configFile.get(SECTION_TARGET, CFG_TARGET_PATH))
 
     # Revert ========================== #
@@ -227,7 +227,7 @@ elif mode == MODE_COPY or mode == MODE_REVERT:
         scpLocal2Target(scp, configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH), configFile.get(SECTION_TARGET, CFG_TARGET_PATH))
     
     # Run target post scp commands ==== #
-    for command in configFile.get(SECTION_TARGET, CFG_TARGET_POST).splitLines():
+    for command in configFile.get(SECTION_TARGET, CFG_TARGET_POST).splitlines():
         runTargetCommand(ssh, command)
 
 # close scp
