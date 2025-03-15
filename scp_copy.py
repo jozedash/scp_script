@@ -40,6 +40,7 @@ SECTION_LOCAL = "local"
 SECTION_TARGET = "target"
 
 CFG_LOCAL_PATH = "path"
+CFG_LOCAL_SKIP = "skip"
 CFG_BACKUPS_PATH = "backups"
 
 CFG_IP = "ip"
@@ -93,18 +94,32 @@ def runTargetCommand(ssh, command):
 # param sourcePath: the source directory
 # param targetPath: the target directory
 def scpLocal2Target(scp, sourcePath, targetPath):
+    skipCount = 0
     for source in os.listdir(sourcePath):
         # scp does not support Windows paths, flip the slashes here
-        genericPath = re.sub(r'\\', '/', source) 
+        genericPath = re.sub(r'\\', '/', source)
+        if shouldSkipFile(genericPath):
+            skipCount += 1
+            continue
+
         sourceFile = os.path.join(sourcePath, genericPath)
         print("Copy file from source " + sourceFile + " to target directory " + targetPath)
-        
+
         try:
             scp.put(sourceFile, recursive=True, remote_path=targetPath)
             print("\tSuccess!")
-        except SCPException:
+        except SCPException as e:
             print("\tCopy failed, bailing!")
+            print(str(e))
             sys.exit(1)
+    return skipCount
+
+def shouldSkipFile(filePath):
+    for skipString in configFile.get(SECTION_LOCAL, CFG_LOCAL_SKIP, fallback='').splitlines():
+        if skipString in filePath:
+            print("Skip file/directory " + filePath + " because it matches skip string " + skipString)
+            return True
+    return False
 
 # printHelp
 # print the help
@@ -186,14 +201,18 @@ if mode == MODE_BACKUP:
                 relativePath = os.path.relpath(os.path.join(root, file), start=directory)
                 genericPath = re.sub(r'\\', '/', relativePath) # scp library does not support Windows paths
 
+                if shouldSkipFile(genericPath):
+                    skipCount += 1
+                    continue
+
                 targetFile = os.path.join(configFile.get(SECTION_TARGET, CFG_TARGET_PATH), \
                                             genericPath)
                 backupPath = os.path.join(configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH), \
                                           os.path.split(genericPath)[0])
                 print("Back up target file " + targetFile + " to local path " + backupPath)
-                
+
                 os.makedirs(backupPath, exist_ok=True)
-                
+
                 try:
                     scp.get(targetFile, backupPath)
                     print("\tSuccess!")
@@ -210,25 +229,27 @@ if mode == MODE_BACKUP:
 
 # Copy or revert=================== #
 elif mode == MODE_COPY or mode == MODE_REVERT:
-    
+
     # Run target pre scp commands ======== #
-    for command in configFile.get(SECTION_TARGET, CFG_TARGET_PRE).splitlines():
+    for command in configFile.get(SECTION_TARGET, CFG_TARGET_PRE, fallback='').splitlines():
         runTargetCommand(ssh, command)
 
     # Copy ============================ #
     if mode == MODE_COPY:
         print("Copying local files to target")
+        skipCount = 0
         for localPath in configFile.get(SECTION_LOCAL, CFG_LOCAL_PATH).splitlines():
-            scpLocal2Target(scp, localPath, configFile.get(SECTION_TARGET, CFG_TARGET_PATH))
+            skipCount += scpLocal2Target(scp, localPath, configFile.get(SECTION_TARGET, CFG_TARGET_PATH))
+        print("Skipped " + str(skipCount) + " file(s)")
 
     # Revert ========================== #
     elif mode == MODE_REVERT:
         print("Copying backed up files to target")
         scpLocal2Target(scp, configFile.get(SECTION_LOCAL, CFG_BACKUPS_PATH), configFile.get(SECTION_TARGET, CFG_TARGET_PATH))
-    
+
     # Run target post scp commands ==== #
-    for command in configFile.get(SECTION_TARGET, CFG_TARGET_POST).splitlines():
+    for command in configFile.get(SECTION_TARGET, CFG_TARGET_POST, fallback='').splitlines():
         runTargetCommand(ssh, command)
 
 # close scp
-scp.close   
+scp.close
