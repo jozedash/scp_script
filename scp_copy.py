@@ -220,6 +220,9 @@ if mode == MODE_BACKUP:
                 except SCPException:
                     print("\tFile not already on target, ignoring")
                     skipCount += 1
+                except:
+                    print("\tUnknown error, skipping this file")
+                    skipCount += 1
 
     print("Backed up " \
           + str(successCount) \
